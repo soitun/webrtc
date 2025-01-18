@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build !js
 // +build !js
 
@@ -13,7 +16,7 @@ import (
 	"github.com/pion/datachannel"
 	"github.com/pion/logging"
 	"github.com/pion/sctp"
-	"github.com/pion/webrtc/v3/pkg/rtcerr"
+	"github.com/pion/webrtc/v4/pkg/rtcerr"
 )
 
 const sctpMaxChannels = uint16(65535)
@@ -42,6 +45,7 @@ type SCTPTransport struct {
 	// OnStateChange  func()
 
 	onErrorHandler func(error)
+	onCloseHandler func(error)
 
 	sctpAssociation            *sctp.Association
 	onDataChannelHandler       func(*DataChannel)
@@ -49,6 +53,7 @@ type SCTPTransport struct {
 
 	// DataChannels
 	dataChannels          []*DataChannel
+	dataChannelIDsUsed    map[uint16]struct{}
 	dataChannelsOpened    uint32
 	dataChannelsRequested uint32
 	dataChannelsAccepted  uint32
@@ -62,10 +67,11 @@ type SCTPTransport struct {
 // meant to be used together with the basic WebRTC API.
 func (api *API) NewSCTPTransport(dtls *DTLSTransport) *SCTPTransport {
 	res := &SCTPTransport{
-		dtlsTransport: dtls,
-		state:         SCTPTransportStateConnecting,
-		api:           api,
-		log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
+		dtlsTransport:      dtls,
+		state:              SCTPTransportStateConnecting,
+		api:                api,
+		log:                api.settingEngine.LoggerFactory.NewLogger("ortc"),
+		dataChannelIDsUsed: make(map[uint16]struct{}),
 	}
 
 	res.updateMessageSize()
@@ -92,7 +98,7 @@ func (r *SCTPTransport) GetCapabilities() SCTPCapabilities {
 // Start the SCTPTransport. Since both local and remote parties must mutually
 // create an SCTPTransport, SCTP SO (Simultaneous Open) is used to establish
 // a connection over SCTP.
-func (r *SCTPTransport) Start(remoteCaps SCTPCapabilities) error {
+func (r *SCTPTransport) Start(_ SCTPCapabilities) error {
 	if r.isStarted {
 		return nil
 	}
@@ -102,11 +108,13 @@ func (r *SCTPTransport) Start(remoteCaps SCTPCapabilities) error {
 	if dtlsTransport == nil || dtlsTransport.conn == nil {
 		return errSCTPTransportDTLS
 	}
-
 	sctpAssociation, err := sctp.Client(sctp.Config{
 		NetConn:              dtlsTransport.conn,
 		MaxReceiveBufferSize: r.api.settingEngine.sctp.maxReceiveBufferSize,
+		EnableZeroChecksum:   r.api.settingEngine.sctp.enableZeroChecksum,
 		LoggerFactory:        r.api.settingEngine.LoggerFactory,
+		RTOMax:               float64(r.api.settingEngine.sctp.rtoMax) / float64(time.Millisecond),
+		BlockWrite:           r.api.settingEngine.detach.DataChannels && r.api.settingEngine.dataChannelBlockWrite,
 	})
 	if err != nil {
 		return err
@@ -124,6 +132,7 @@ func (r *SCTPTransport) Start(remoteCaps SCTPCapabilities) error {
 			err := d.open(r)
 			if err != nil {
 				r.log.Warnf("failed to open data channel: %s", err)
+
 				continue
 			}
 			openedDCCount++
@@ -134,22 +143,20 @@ func (r *SCTPTransport) Start(remoteCaps SCTPCapabilities) error {
 	r.dataChannelsOpened += openedDCCount
 	r.lock.Unlock()
 
-	go r.acceptDataChannels(sctpAssociation)
+	go r.acceptDataChannels(sctpAssociation, dataChannels)
 
 	return nil
 }
 
-// Stop stops the SCTPTransport
+// Stop stops the SCTPTransport.
 func (r *SCTPTransport) Stop() error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	if r.sctpAssociation == nil {
 		return nil
 	}
-	err := r.sctpAssociation.Close()
-	if err != nil {
-		return err
-	}
+
+	r.sctpAssociation.Abort("")
 
 	r.sctpAssociation = nil
 	r.state = SCTPTransportStateClosed
@@ -157,10 +164,13 @@ func (r *SCTPTransport) Stop() error {
 	return nil
 }
 
-func (r *SCTPTransport) acceptDataChannels(a *sctp.Association) {
-	r.lock.RLock()
-	dataChannels := make([]*datachannel.DataChannel, 0, len(r.dataChannels))
-	for _, dc := range r.dataChannels {
+//nolint:cyclop
+func (r *SCTPTransport) acceptDataChannels(
+	assoc *sctp.Association,
+	existingDataChannels []*DataChannel,
+) {
+	dataChannels := make([]*datachannel.DataChannel, 0, len(existingDataChannels))
+	for _, dc := range existingDataChannels {
 		dc.mu.Lock()
 		isNil := dc.dataChannel == nil
 		dc.mu.Unlock()
@@ -169,17 +179,20 @@ func (r *SCTPTransport) acceptDataChannels(a *sctp.Association) {
 		}
 		dataChannels = append(dataChannels, dc.dataChannel)
 	}
-	r.lock.RUnlock()
 ACCEPT:
 	for {
-		dc, err := datachannel.Accept(a, &datachannel.Config{
+		dc, err := datachannel.Accept(assoc, &datachannel.Config{
 			LoggerFactory: r.api.settingEngine.LoggerFactory,
 		}, dataChannels...)
 		if err != nil {
 			if !errors.Is(err, io.EOF) {
 				r.log.Errorf("Failed to accept data channel: %v", err)
 				r.onError(err)
+				r.onClose(err)
+			} else {
+				r.onClose(nil)
 			}
+
 			return
 		}
 		for _, ch := range dataChannels {
@@ -192,7 +205,7 @@ ACCEPT:
 			maxRetransmits    *uint16
 			maxPacketLifeTime *uint16
 		)
-		val := uint16(dc.Config.ReliabilityParameter)
+		val := uint16(dc.Config.ReliabilityParameter) //nolint:gosec //G115
 		ordered := true
 
 		switch dc.Config.ChannelType {
@@ -224,11 +237,16 @@ ACCEPT:
 			Ordered:           ordered,
 			MaxPacketLifeTime: maxPacketLifeTime,
 			MaxRetransmits:    maxRetransmits,
-		}, r.api.settingEngine.LoggerFactory.NewLogger("ortc"))
+		}, r, r.api.settingEngine.LoggerFactory.NewLogger("ortc"))
 		if err != nil {
+			// This data channel is invalid. Close it and log an error.
+			if err1 := dc.Close(); err1 != nil {
+				r.log.Errorf("Failed to close invalid data channel: %v", err1)
+			}
 			r.log.Errorf("Failed to accept data channel: %v", err)
 			r.onError(err)
-			return
+			// We've received a datachannel with invalid configuration. We can still receive other datachannels.
+			continue ACCEPT
 		}
 
 		<-r.onDataChannel(rtcDC)
@@ -245,8 +263,7 @@ ACCEPT:
 	}
 }
 
-// OnError sets an event handler which is invoked when
-// the SCTP connection error occurs.
+// OnError sets an event handler which is invoked when the SCTP Association errors.
 func (r *SCTPTransport) OnError(f func(err error)) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -263,6 +280,23 @@ func (r *SCTPTransport) onError(err error) {
 	}
 }
 
+// OnClose sets an event handler which is invoked when the SCTP Association closes.
+func (r *SCTPTransport) OnClose(f func(err error)) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.onCloseHandler = f
+}
+
+func (r *SCTPTransport) onClose(err error) {
+	r.lock.RLock()
+	handler := r.onCloseHandler
+	r.lock.RUnlock()
+
+	if handler != nil {
+		go handler(err)
+	}
+}
+
 // OnDataChannel sets an event handler which is invoked when a data
 // channel message arrives from a remote peer.
 func (r *SCTPTransport) OnDataChannel(f func(*DataChannel)) {
@@ -272,7 +306,7 @@ func (r *SCTPTransport) OnDataChannel(f func(*DataChannel)) {
 }
 
 // OnDataChannelOpened sets an event handler which is invoked when a data
-// channel is opened
+// channel is opened.
 func (r *SCTPTransport) OnDataChannelOpened(f func(*DataChannel)) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -283,12 +317,20 @@ func (r *SCTPTransport) onDataChannel(dc *DataChannel) (done chan struct{}) {
 	r.lock.Lock()
 	r.dataChannels = append(r.dataChannels, dc)
 	r.dataChannelsAccepted++
+	if dc.ID() != nil {
+		r.dataChannelIDsUsed[*dc.ID()] = struct{}{}
+	} else {
+		// This cannot happen, the constructor for this datachannel in the caller
+		// takes a pointer to the id.
+		r.log.Errorf("accepted data channel with no ID")
+	}
 	handler := r.onDataChannelHandler
 	r.lock.Unlock()
 
 	done = make(chan struct{})
 	if handler == nil || dc == nil {
 		close(done)
+
 		return
 	}
 
@@ -349,19 +391,20 @@ func (r *SCTPTransport) MaxChannels() uint16 {
 	return *r.maxChannels
 }
 
-// State returns the current state of the SCTPTransport
+// State returns the current state of the SCTPTransport.
 func (r *SCTPTransport) State() SCTPTransportState {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
+
 	return r.state
 }
 
 func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
 	collector.Collecting()
 
-	stats := TransportStats{
+	stats := SCTPTransportStats{
 		Timestamp: statsTimestampFrom(time.Now()),
-		Type:      StatsTypeTransport,
+		Type:      StatsTypeSCTPTransport,
 		ID:        "sctpTransport",
 	}
 
@@ -369,6 +412,10 @@ func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
 	if association != nil {
 		stats.BytesSent = association.BytesSent()
 		stats.BytesReceived = association.BytesReceived()
+		stats.SmoothedRoundTripTime = association.SRTT() * 0.001 // convert milliseconds to seconds
+		stats.CongestionWindow = association.CWND()
+		stats.ReceiverWindow = association.RWND()
+		stats.MTU = association.MTU()
 	}
 
 	collector.Collect(stats.ID, stats)
@@ -380,26 +427,18 @@ func (r *SCTPTransport) generateAndSetDataChannelID(dtlsRole DTLSRole, idOut **u
 		id++
 	}
 
-	max := r.MaxChannels()
+	maxVal := r.MaxChannels()
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	// Create map of ids so we can compare without double-looping each time.
-	idsMap := make(map[uint16]struct{}, len(r.dataChannels))
-	for _, dc := range r.dataChannels {
-		if dc.ID() == nil {
-			continue
-		}
-
-		idsMap[*dc.ID()] = struct{}{}
-	}
-
-	for ; id < max-1; id += 2 {
-		if _, ok := idsMap[id]; ok {
+	for ; id < maxVal-1; id += 2 {
+		if _, ok := r.dataChannelIDsUsed[id]; ok {
 			continue
 		}
 		*idOut = &id
+		r.dataChannelIDsUsed[id] = struct{}{}
+
 		return nil
 	}
 
@@ -413,5 +452,6 @@ func (r *SCTPTransport) association() *sctp.Association {
 	r.lock.RLock()
 	association := r.sctpAssociation
 	r.lock.RUnlock()
+
 	return association
 }

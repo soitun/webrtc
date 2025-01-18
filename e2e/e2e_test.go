@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build e2e
 // +build e2e
 
@@ -13,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/webrtc/v3"
-	"github.com/pion/webrtc/v3/pkg/media"
+	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media"
 	"github.com/sclevine/agouti"
 )
 
@@ -91,7 +94,7 @@ func TestE2E_Audio(t *testing.T) {
 			}
 			var result string
 			if err := page.RunScript(
-				"pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answer)))",
+				"pc.setRemoteDescription(JSON.parse(answer))",
 				map[string]interface{}{"answer": string(answerBytes)},
 				&result,
 			); err != nil {
@@ -231,7 +234,7 @@ func TestE2E_DataChannel(t *testing.T) {
 			}
 			var result string
 			if err := page.RunScript(
-				"pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(answer)))",
+				"pc.setRemoteDescription(JSON.parse(answer))",
 				map[string]interface{}{"answer": string(answerBytes)},
 				&result,
 			); err != nil {

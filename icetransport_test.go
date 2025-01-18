@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build !js
 // +build !js
 
@@ -9,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/transport/test"
+	"github.com/pion/transport/v3/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,7 +75,7 @@ func TestICETransport_OnSelectedCandidatePairChange(t *testing.T) {
 	})
 
 	senderCalledCandidateChange := int32(0)
-	pcOffer.SCTP().Transport().ICETransport().OnSelectedCandidatePairChange(func(pair *ICECandidatePair) {
+	pcOffer.SCTP().Transport().ICETransport().OnSelectedCandidatePairChange(func(*ICECandidatePair) {
 		atomic.StoreInt32(&senderCalledCandidateChange, 1)
 	})
 
@@ -95,10 +98,14 @@ func TestICETransport_GetSelectedCandidatePair(t *testing.T) {
 	offererSelectedPair, err := offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
 	assert.NoError(t, err)
 	assert.Nil(t, offererSelectedPair)
+	_, statsAvailable := offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePairStats()
+	assert.False(t, statsAvailable)
 
 	answererSelectedPair, err := answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
 	assert.NoError(t, err)
 	assert.Nil(t, answererSelectedPair)
+	_, statsAvailable = answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePairStats()
+	assert.False(t, statsAvailable)
 
 	assert.NoError(t, signalPair(offerer, answerer))
 	peerConnectionConnected.Wait()
@@ -106,10 +113,31 @@ func TestICETransport_GetSelectedCandidatePair(t *testing.T) {
 	offererSelectedPair, err = offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
 	assert.NoError(t, err)
 	assert.NotNil(t, offererSelectedPair)
+	_, statsAvailable = offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePairStats()
+	assert.True(t, statsAvailable)
 
 	answererSelectedPair, err = answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
 	assert.NoError(t, err)
 	assert.NotNil(t, answererSelectedPair)
+	_, statsAvailable = answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePairStats()
+	assert.True(t, statsAvailable)
+
+	closePairNow(t, offerer, answerer)
+}
+
+func TestICETransport_GetLocalParameters(t *testing.T) {
+	offerer, answerer, err := newPair()
+	assert.NoError(t, err)
+
+	peerConnectionConnected := untilConnectionState(PeerConnectionStateConnected, offerer, answerer)
+
+	assert.NoError(t, signalPair(offerer, answerer))
+	peerConnectionConnected.Wait()
+
+	localParameters, err := offerer.SCTP().Transport().ICETransport().GetLocalParameters()
+	assert.NoError(t, err)
+	assert.NotEqual(t, localParameters.UsernameFragment, "")
+	assert.NotEqual(t, localParameters.Password, "")
 
 	closePairNow(t, offerer, answerer)
 }

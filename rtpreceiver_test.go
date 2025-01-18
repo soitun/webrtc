@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build !js
 // +build !js
 
@@ -8,13 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/transport/test"
-	"github.com/pion/webrtc/v3/pkg/media"
+	"github.com/pion/interceptor"
+	"github.com/pion/transport/v3/test"
+	"github.com/pion/webrtc/v4/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
 // Assert that SetReadDeadline works as expected
-// This test uses VNet since we must have zero loss
+// This test uses VNet since we must have zero loss.
 func Test_RTPReceiver_SetReadDeadline(t *testing.T) {
 	lim := test.TimeOut(time.Second * 30)
 	defer lim.Stop()
@@ -22,7 +26,7 @@ func Test_RTPReceiver_SetReadDeadline(t *testing.T) {
 	report := test.CheckRoutines(t)
 	defer report()
 
-	sender, receiver, wan := createVNetPair(t)
+	sender, receiver, wan := createVNetPair(t, &interceptor.Registry{})
 
 	track, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: MimeTypeVP8}, "video", "pion")
 	assert.NoError(t, err)

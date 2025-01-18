@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
+// ice-restart demonstrates Pion WebRTC's ICE Restart abilities.
 package main
 
 import (
@@ -6,12 +10,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 )
 
 var peerConnection *webrtc.PeerConnection //nolint
 
-func doSignaling(w http.ResponseWriter, r *http.Request) {
+// nolint: cyclop
+func doSignaling(res http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if peerConnection == nil {
@@ -38,7 +43,7 @@ func doSignaling(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var offer webrtc.SessionDescription
-	if err = json.NewDecoder(r.Body).Decode(&offer); err != nil {
+	if err = json.NewDecoder(req.Body).Decode(&offer); err != nil {
 		panic(err)
 	}
 
@@ -66,8 +71,8 @@ func doSignaling(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(response); err != nil {
+	res.Header().Set("Content-Type", "application/json")
+	if _, err := res.Write(response); err != nil {
 		panic(err)
 	}
 }
@@ -77,5 +82,6 @@ func main() {
 	http.HandleFunc("/doSignaling", doSignaling)
 
 	fmt.Println("Open http://localhost:8080 to access this demo")
+	// nolint: gosec
 	panic(http.ListenAndServe(":8080", nil))
 }

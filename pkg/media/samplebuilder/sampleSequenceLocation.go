@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 // Package samplebuilder provides functionality to reconstruct media frames from RTP packets.
 package samplebuilder
 
@@ -46,5 +49,6 @@ func (l sampleSequenceLocation) compare(pos uint16) int {
 	if l.head-pos <= pos-l.tail {
 		return slCompareBefore
 	}
+
 	return slCompareAfter
 }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 import (
@@ -5,7 +8,7 @@ import (
 )
 
 // SDPSemantics determines which style of SDP offers and answers
-// can be used
+// can be used.
 type SDPSemantics int
 
 const (
@@ -21,7 +24,7 @@ const (
 
 	// SDPSemanticsUnifiedPlanWithFallback prefers unified-plan
 	// offers and answers, but will respond to a plan-b offer
-	// with a plan-b answer
+	// with a plan-b answer.
 	SDPSemanticsUnifiedPlanWithFallback
 )
 
@@ -33,14 +36,12 @@ const (
 
 func newSDPSemantics(raw string) SDPSemantics {
 	switch raw {
-	case sdpSemanticsUnifiedPlan:
-		return SDPSemanticsUnifiedPlan
 	case sdpSemanticsPlanB:
 		return SDPSemanticsPlanB
 	case sdpSemanticsUnifiedPlanWithFallback:
 		return SDPSemanticsUnifiedPlanWithFallback
 	default:
-		return SDPSemantics(Unknown)
+		return SDPSemanticsUnifiedPlan
 	}
 }
 
@@ -57,7 +58,7 @@ func (s SDPSemantics) String() string {
 	}
 }
 
-// UnmarshalJSON parses the JSON-encoded data and stores the result
+// UnmarshalJSON parses the JSON-encoded data and stores the result.
 func (s *SDPSemantics) UnmarshalJSON(b []byte) error {
 	var val string
 	if err := json.Unmarshal(b, &val); err != nil {
@@ -65,10 +66,11 @@ func (s *SDPSemantics) UnmarshalJSON(b []byte) error {
 	}
 
 	*s = newSDPSemantics(val)
+
 	return nil
 }
 
-// MarshalJSON returns the JSON encoding
+// MarshalJSON returns the JSON encoding.
 func (s SDPSemantics) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.String())
 }

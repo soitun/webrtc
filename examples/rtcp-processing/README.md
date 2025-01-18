@@ -11,12 +11,11 @@ also craft messages to influence the media quality.
 ## Instructions
 ### Download rtcp-processing
 ```
-export GO111MODULE=on
-go get github.com/pion/webrtc/v3/examples/rtcp-processing
+go install github.com/pion/webrtc/v4/examples/rtcp-processing@latest
 ```
 
 ### Open rtcp-processing example page
-[jsfiddle.net](https://jsfiddle.net/Le3zg7sd/) you should see two text-areas, 'Start Session' button and 'Copy browser SessionDescription to clipboard'
+[jsfiddle.net](https://jsfiddle.net/zurq6j7x/) you should see two text-areas, 'Start Session' button and 'Copy browser SessionDescription to clipboard'
 
 ### Run rtcp-processing with your browsers Session Description as stdin
 In the jsfiddle press 'Copy browser Session Description to clipboard' or copy the base64 string manually.

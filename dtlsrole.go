@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 import (
@@ -8,10 +11,13 @@ import (
 type DTLSRole byte
 
 const (
+	// DTLSRoleUnknown is the enum's zero-value.
+	DTLSRoleUnknown DTLSRole = iota
+
 	// DTLSRoleAuto defines the DTLS role is determined based on
 	// the resolved ICE role: the ICE controlled role acts as the DTLS
 	// client and the ICE controlling role acts as the DTLS server.
-	DTLSRoleAuto DTLSRole = iota + 1
+	DTLSRoleAuto
 
 	// DTLSRoleClient defines the DTLS client role.
 	DTLSRoleClient
@@ -48,13 +54,13 @@ func (r DTLSRole) String() string {
 	case DTLSRoleServer:
 		return "server"
 	default:
-		return unknownStr
+		return ErrUnknownType.Error()
 	}
 }
 
 // Iterate a SessionDescription from a remote to determine if an explicit
 // role can been determined from it. The decision is made from the first role we we parse.
-// If no role can be found we return DTLSRoleAuto
+// If no role can be found we return DTLSRoleAuto.
 func dtlsRoleFromRemoteSDP(sessionDescription *sdp.SessionDescription) DTLSRole {
 	if sessionDescription == nil {
 		return DTLSRoleAuto

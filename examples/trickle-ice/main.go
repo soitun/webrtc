@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
+// trickle-ice demonstrates Pion WebRTC's Trickle ICE APIs.  ICE is the subsystem WebRTC uses to establish connectivity.
 package main
 
 import (
@@ -6,12 +10,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"golang.org/x/net/websocket"
 )
 
 // websocketServer is called for every new inbound WebSocket
-func websocketServer(ws *websocket.Conn) { // nolint:gocognit
+// nolint: gocognit, cyclop
+func websocketServer(wsConn *websocket.Conn) {
 	// Create a new RTCPeerConnection
 	peerConnection, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -22,17 +27,17 @@ func websocketServer(ws *websocket.Conn) { // nolint:gocognit
 	// ice trickle is implemented. Everytime we have a new candidate available we send
 	// it as soon as it is ready. We don't wait to emit a Offer/Answer until they are
 	// all available
-	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
-		if c == nil {
+	peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
 			return
 		}
 
-		outbound, marshalErr := json.Marshal(c.ToJSON())
+		outbound, marshalErr := json.Marshal(candidate.ToJSON())
 		if marshalErr != nil {
 			panic(marshalErr)
 		}
 
-		if _, err = ws.Write(outbound); err != nil {
+		if _, err = wsConn.Write(outbound); err != nil {
 			panic(err)
 		}
 	})
@@ -57,7 +62,7 @@ func websocketServer(ws *websocket.Conn) { // nolint:gocognit
 	buf := make([]byte, 1500)
 	for {
 		// Read each inbound WebSocket Message
-		n, err := ws.Read(buf)
+		n, err := wsConn.Read(buf)
 		if err != nil {
 			panic(err)
 		}
@@ -90,7 +95,7 @@ func websocketServer(ws *websocket.Conn) { // nolint:gocognit
 				panic(marshalErr)
 			}
 
-			if _, err = ws.Write(outbound); err != nil {
+			if _, err = wsConn.Write(outbound); err != nil {
 				panic(err)
 			}
 		// Attempt to unmarshal as a ICECandidateInit. If the candidate field is empty
@@ -110,5 +115,6 @@ func main() {
 	http.Handle("/websocket", websocket.Handler(websocketServer))
 
 	fmt.Println("Open http://localhost:8080 to access this demo")
+	// nolint: gosec
 	panic(http.ListenAndServe(":8080", nil))
 }

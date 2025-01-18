@@ -1,27 +1,33 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/pion/webrtc/v3/internal/fmtp"
+	"github.com/pion/webrtc/v4/internal/fmtp"
 )
 
-// RTPCodecType determines the type of a codec
+// RTPCodecType determines the type of a codec.
 type RTPCodecType int
 
 const (
+	// RTPCodecTypeUnknown is the enum's zero-value.
+	RTPCodecTypeUnknown RTPCodecType = iota
 
-	// RTPCodecTypeAudio indicates this is an audio codec
-	RTPCodecTypeAudio RTPCodecType = iota + 1
+	// RTPCodecTypeAudio indicates this is an audio codec.
+	RTPCodecTypeAudio
 
-	// RTPCodecTypeVideo indicates this is a video codec
+	// RTPCodecTypeVideo indicates this is a video codec.
 	RTPCodecTypeVideo
 )
 
 func (t RTPCodecType) String() string {
 	switch t {
 	case RTPCodecTypeAudio:
-		return "audio"
+		return "audio" //nolint: goconst
 	case RTPCodecTypeVideo:
 		return "video" //nolint: goconst
 	default:
@@ -29,7 +35,7 @@ func (t RTPCodecType) String() string {
 	}
 }
 
-// NewRTPCodecType creates a RTPCodecType from a string
+// NewRTPCodecType creates a RTPCodecType from a string.
 func NewRTPCodecType(r string) RTPCodecType {
 	switch {
 	case strings.EqualFold(r, RTPCodecTypeAudio.String()):
@@ -97,8 +103,11 @@ const (
 
 // Do a fuzzy find for a codec in the list of codecs
 // Used for lookup up a codec in an existing list to find a match
-// Returns codecMatchExact, codecMatchPartial, or codecMatchNone
-func codecParametersFuzzySearch(needle RTPCodecParameters, haystack []RTPCodecParameters) (RTPCodecParameters, codecMatchType) {
+// Returns codecMatchExact, codecMatchPartial, or codecMatchNone.
+func codecParametersFuzzySearch(
+	needle RTPCodecParameters,
+	haystack []RTPCodecParameters,
+) (RTPCodecParameters, codecMatchType) {
 	needleFmtp := fmtp.Parse(needle.RTPCodecCapability.MimeType, needle.RTPCodecCapability.SDPFmtpLine)
 
 	// First attempt to match on MimeType + SDPFmtpLine
@@ -117,4 +126,30 @@ func codecParametersFuzzySearch(needle RTPCodecParameters, haystack []RTPCodecPa
 	}
 
 	return RTPCodecParameters{}, codecMatchNone
+}
+
+// Given a CodecParameters find the RTX CodecParameters if one exists.
+func findRTXPayloadType(needle PayloadType, haystack []RTPCodecParameters) PayloadType {
+	aptStr := fmt.Sprintf("apt=%d", needle)
+	for _, c := range haystack {
+		if aptStr == c.SDPFmtpLine {
+			return c.PayloadType
+		}
+	}
+
+	return PayloadType(0)
+}
+
+func rtcpFeedbackIntersection(a, b []RTCPFeedback) (out []RTCPFeedback) {
+	for _, aFeedback := range a {
+		for _, bFeeback := range b {
+			if aFeedback.Type == bFeeback.Type && aFeedback.Parameter == bFeeback.Parameter {
+				out = append(out, aFeedback)
+
+				break
+			}
+		}
+	}
+
+	return
 }

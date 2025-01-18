@@ -1,5 +1,8 @@
 /* eslint-env browser */
 
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 const pc = new RTCPeerConnection({
   iceServers: [
     {
@@ -32,7 +35,7 @@ window.startSession = () => {
   }
 
   try {
-    pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
+    pc.setRemoteDescription(JSON.parse(atob(sd)))
   } catch (e) {
     alert(e)
   }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 // OfferAnswerOptions is a base structure which describes the options that
@@ -15,7 +18,7 @@ type AnswerOptions struct {
 }
 
 // OfferOptions structure describes the options used to control the offer
-// creation process
+// creation process.
 type OfferOptions struct {
 	OfferAnswerOptions
 

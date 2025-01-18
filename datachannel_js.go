@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build js && wasm
 // +build js,wasm
 
@@ -112,7 +115,7 @@ func (d *DataChannel) SendText(s string) (err error) {
 // Before calling Detach you have to enable this behavior by calling
 // webrtc.DetachDataChannels(). Combining detached and normal data channels
 // is not supported.
-// Please reffer to the data-channels-detach example and the
+// Please refer to the data-channels-detach example and the
 // pion/datachannel documentation for the correct way to handle the
 // resulting DataChannel object.
 func (d *DataChannel) Detach() (datachannel.ReadWriteCloser, error) {
@@ -243,7 +246,7 @@ func (d *DataChannel) SetBufferedAmountLowThreshold(th uint64) {
 }
 
 // OnBufferedAmountLow sets an event handler which is invoked when
-// the number of bytes of outgoing data becomes lower than the
+// the number of bytes of outgoing data becomes lower than or equal to the
 // BufferedAmountLowThreshold.
 func (d *DataChannel) OnBufferedAmountLow(f func()) {
 	if d.onBufferedAmountLow != nil {

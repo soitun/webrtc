@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build !js
 // +build !js
 
@@ -22,27 +25,48 @@ type API struct {
 }
 
 // NewAPI Creates a new API object for keeping semi-global settings to WebRTC objects
+//
+// It uses the default Codecs and Interceptors unless you customize them
+// using WithMediaEngine and WithInterceptorRegistry respectively.
 func NewAPI(options ...func(*API)) *API {
-	a := &API{
-		interceptor:         &interceptor.NoOp{},
-		settingEngine:       &SettingEngine{},
-		mediaEngine:         &MediaEngine{},
-		interceptorRegistry: &interceptor.Registry{},
+	api := &API{
+		interceptor:   &interceptor.NoOp{},
+		settingEngine: &SettingEngine{},
 	}
 
 	for _, o := range options {
-		o(a)
+		o(api)
 	}
 
-	if a.settingEngine.LoggerFactory == nil {
-		a.settingEngine.LoggerFactory = logging.NewDefaultLoggerFactory()
+	if api.settingEngine.LoggerFactory == nil {
+		api.settingEngine.LoggerFactory = logging.NewDefaultLoggerFactory()
 	}
 
-	return a
+	logger := api.settingEngine.LoggerFactory.NewLogger("api")
+
+	if api.mediaEngine == nil {
+		api.mediaEngine = &MediaEngine{}
+		err := api.mediaEngine.RegisterDefaultCodecs()
+		if err != nil {
+			logger.Errorf("Failed to register default codecs %s", err)
+		}
+	}
+
+	if api.interceptorRegistry == nil {
+		api.interceptorRegistry = &interceptor.Registry{}
+		err := RegisterDefaultInterceptors(api.mediaEngine, api.interceptorRegistry)
+		if err != nil {
+			logger.Errorf("Failed to register default interceptors %s", err)
+		}
+	}
+
+	return api
 }
 
 // WithMediaEngine allows providing a MediaEngine to the API.
 // Settings can be changed after passing the engine to an API.
+// When a PeerConnection is created the MediaEngine is copied
+// and no more changes can be made.
 func WithMediaEngine(m *MediaEngine) func(a *API) {
 	return func(a *API) {
 		a.mediaEngine = m

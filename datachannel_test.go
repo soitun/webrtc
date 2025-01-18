@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 import (
@@ -7,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/transport/test"
+	"github.com/pion/transport/v3/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,22 +19,26 @@ import (
 // bindings this is a requirement).
 const expectedLabel = "data"
 
-func closePairNow(t testing.TB, pc1, pc2 io.Closer) {
+func closePairNow(tb testing.TB, pc1, pc2 io.Closer) {
+	tb.Helper()
+
 	var fail bool
 	if err := pc1.Close(); err != nil {
-		t.Errorf("Failed to close PeerConnection: %v", err)
+		tb.Errorf("Failed to close PeerConnection: %v", err)
 		fail = true
 	}
 	if err := pc2.Close(); err != nil {
-		t.Errorf("Failed to close PeerConnection: %v", err)
+		tb.Errorf("Failed to close PeerConnection: %v", err)
 		fail = true
 	}
 	if fail {
-		t.FailNow()
+		tb.FailNow()
 	}
 }
 
 func closePair(t *testing.T, pc1, pc2 io.Closer, done <-chan bool) {
+	t.Helper()
+
 	select {
 	case <-time.After(10 * time.Second):
 		t.Fatalf("closePair timed out waiting for done signal")
@@ -40,7 +47,12 @@ func closePair(t *testing.T, pc1, pc2 io.Closer, done <-chan bool) {
 	}
 }
 
-func setUpDataChannelParametersTest(t *testing.T, options *DataChannelInit) (*PeerConnection, *PeerConnection, *DataChannel, chan bool) {
+func setUpDataChannelParametersTest(
+	t *testing.T,
+	options *DataChannelInit,
+) (*PeerConnection, *PeerConnection, *DataChannel, chan bool) {
+	t.Helper()
+
 	offerPC, answerPC, err := newPair()
 	if err != nil {
 		t.Fatalf("Failed to create a PC pair for testing")
@@ -56,6 +68,8 @@ func setUpDataChannelParametersTest(t *testing.T, options *DataChannelInit) (*Pe
 }
 
 func closeReliabilityParamTest(t *testing.T, pc1, pc2 *PeerConnection, done chan bool) {
+	t.Helper()
+
 	err := signalPair(pc1, pc2)
 	if err != nil {
 		t.Fatalf("Failed to signal our PC pair for testing")
@@ -72,6 +86,8 @@ func BenchmarkDataChannelSend32(b *testing.B) { benchmarkDataChannelSend(b, 32) 
 
 // See https://github.com/pion/webrtc/issues/1516
 func benchmarkDataChannelSend(b *testing.B, numChannels int) {
+	b.Helper()
+
 	offerPC, answerPC, err := newPair()
 	if err != nil {
 		b.Fatalf("Failed to create a PC pair for testing")
@@ -132,7 +148,7 @@ func TestDataChannel_Open(t *testing.T) {
 			d.OnOpen(func() {
 				openCalls <- true
 			})
-			d.OnMessage(func(msg DataChannelMessage) {
+			d.OnMessage(func(DataChannelMessage) {
 				go func() {
 					// Wait a little bit to ensure all messages are processed.
 					time.Sleep(100 * time.Millisecond)
@@ -188,7 +204,7 @@ func TestDataChannel_Open(t *testing.T) {
 		})
 		assert.NoError(t, err)
 
-		answerDC.OnMessage(func(msg DataChannelMessage) {
+		answerDC.OnMessage(func(DataChannelMessage) {
 			go func() {
 				// Wait a little bit to ensure all messages are processed.
 				time.Sleep(100 * time.Millisecond)
@@ -216,7 +232,7 @@ func TestDataChannel_Open(t *testing.T) {
 	})
 }
 
-func TestDataChannel_Send(t *testing.T) {
+func TestDataChannel_Send(t *testing.T) { //nolint:cyclop
 	t.Run("before signaling", func(t *testing.T) {
 		report := test.CheckRoutines(t)
 		defer report()
@@ -234,7 +250,7 @@ func TestDataChannel_Send(t *testing.T) {
 			if d.Label() != expectedLabel {
 				return
 			}
-			d.OnMessage(func(msg DataChannelMessage) {
+			d.OnMessage(func(DataChannelMessage) {
 				e := d.Send([]byte("Pong"))
 				if e != nil {
 					t.Fatalf("Failed to send string on data channel")
@@ -256,7 +272,7 @@ func TestDataChannel_Send(t *testing.T) {
 				t.Fatalf("Failed to send string on data channel")
 			}
 		})
-		dc.OnMessage(func(msg DataChannelMessage) {
+		dc.OnMessage(func(DataChannelMessage) {
 			done <- true
 		})
 
@@ -285,7 +301,7 @@ func TestDataChannel_Send(t *testing.T) {
 			if d.Label() != expectedLabel {
 				return
 			}
-			d.OnMessage(func(msg DataChannelMessage) {
+			d.OnMessage(func(DataChannelMessage) {
 				e := d.Send([]byte("Pong"))
 				if e != nil {
 					t.Fatalf("Failed to send string on data channel")
@@ -306,7 +322,7 @@ func TestDataChannel_Send(t *testing.T) {
 
 					assert.True(t, dc.Ordered(), "Ordered should be set to true")
 
-					dc.OnMessage(func(msg DataChannelMessage) {
+					dc.OnMessage(func(DataChannelMessage) {
 						done <- true
 					})
 
@@ -359,7 +375,7 @@ func TestDataChannel_Close(t *testing.T) {
 	})
 }
 
-func TestDataChannelParameters(t *testing.T) {
+func TestDataChannelParameters(t *testing.T) { //nolint:cyclop
 	report := test.CheckRoutines(t)
 	defer report()
 
@@ -474,7 +490,7 @@ func TestDataChannelParameters(t *testing.T) {
 
 			t.Fatal("OnDataChannel must not be fired when negotiated == true")
 		})
-		offerPC.OnDataChannel(func(d *DataChannel) {
+		offerPC.OnDataChannel(func(*DataChannel) {
 			t.Fatal("OnDataChannel must not be fired when negotiated == true")
 		})
 

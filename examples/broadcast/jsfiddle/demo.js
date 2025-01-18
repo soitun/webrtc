@@ -1,4 +1,8 @@
 /* eslint-env browser */
+
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 const log = msg => {
   document.getElementById('logs').innerHTML += msg + '<br>'
 }
@@ -48,7 +52,7 @@ window.createSession = isPublisher => {
     }
 
     try {
-      pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
+      pc.setRemoteDescription(JSON.parse(atob(sd)))
     } catch (e) {
       alert(e)
     }

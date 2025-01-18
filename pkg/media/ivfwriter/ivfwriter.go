@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 // Package ivfwriter implements IVF media container writer
 package ivfwriter
 
@@ -9,7 +12,7 @@ import (
 
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
-	"github.com/pion/rtp/pkg/frame"
+	"github.com/pion/rtp/codecs/av1/frame"
 )
 
 var (
@@ -26,13 +29,20 @@ const (
 	ivfFileHeaderSignature = "DKIF"
 )
 
-// IVFWriter is used to take RTP packets and write them to an IVF on disk
+var errInvalidMediaTimebase = errors.New("invalid media timebase")
+
+// IVFWriter is used to take RTP packets and write them to an IVF on disk.
 type IVFWriter struct {
 	ioWriter     io.Writer
 	count        uint64
 	seenKeyFrame bool
 
 	isVP8, isAV1 bool
+
+	timebaseDenominator uint32
+	timebaseNumerator   uint32
+	firstFrameTimestamp uint32
+	clockRate           uint64
 
 	// VP8
 	currentFrame []byte
@@ -41,29 +51,33 @@ type IVFWriter struct {
 	av1Frame frame.AV1
 }
 
-// New builds a new IVF writer
+// New builds a new IVF writer.
 func New(fileName string, opts ...Option) (*IVFWriter, error) {
-	f, err := os.Create(fileName) //nolint:gosec
+	file, err := os.Create(fileName) //nolint:gosec
 	if err != nil {
 		return nil, err
 	}
-	writer, err := NewWith(f, opts...)
+	writer, err := NewWith(file, opts...)
 	if err != nil {
 		return nil, err
 	}
-	writer.ioWriter = f
+	writer.ioWriter = file
+
 	return writer, nil
 }
 
-// NewWith initialize a new IVF writer with an io.Writer output
+// NewWith initialize a new IVF writer with an io.Writer output.
 func NewWith(out io.Writer, opts ...Option) (*IVFWriter, error) {
 	if out == nil {
 		return nil, errFileNotOpened
 	}
 
 	writer := &IVFWriter{
-		ioWriter:     out,
-		seenKeyFrame: false,
+		ioWriter:            out,
+		seenKeyFrame:        false,
+		timebaseDenominator: 30,
+		timebaseNumerator:   1,
+		clockRate:           90000,
 	}
 
 	for _, o := range opts {
@@ -79,6 +93,11 @@ func NewWith(out io.Writer, opts ...Option) (*IVFWriter, error) {
 	if err := writer.writeHeader(); err != nil {
 		return nil, err
 	}
+
+	if writer.timebaseDenominator == 0 {
+		return nil, errInvalidMediaTimebase
+	}
+
 	return writer, nil
 }
 
@@ -95,47 +114,59 @@ func (i *IVFWriter) writeHeader() error {
 		copy(header[8:], "AV01")
 	}
 
-	binary.LittleEndian.PutUint16(header[12:], 640) // Width in pixels
-	binary.LittleEndian.PutUint16(header[14:], 480) // Height in pixels
-	binary.LittleEndian.PutUint32(header[16:], 30)  // Framerate denominator
-	binary.LittleEndian.PutUint32(header[20:], 1)   // Framerate numerator
-	binary.LittleEndian.PutUint32(header[24:], 900) // Frame count, will be updated on first Close() call
-	binary.LittleEndian.PutUint32(header[28:], 0)   // Unused
+	binary.LittleEndian.PutUint16(header[12:], 640)                   // Width in pixels
+	binary.LittleEndian.PutUint16(header[14:], 480)                   // Height in pixels
+	binary.LittleEndian.PutUint32(header[16:], i.timebaseDenominator) // Framerate denominator
+	binary.LittleEndian.PutUint32(header[20:], i.timebaseNumerator)   // Framerate numerator
+	binary.LittleEndian.PutUint32(header[24:], 900)                   // Frame count, will be updated on first Close() call
+	binary.LittleEndian.PutUint32(header[28:], 0)                     // Unused
 
 	_, err := i.ioWriter.Write(header)
+
 	return err
 }
 
-func (i *IVFWriter) writeFrame(frame []byte) error {
+func (i *IVFWriter) timestampToPts(timestamp uint64) uint64 {
+	return timestamp * uint64(i.timebaseNumerator) / uint64(i.timebaseDenominator)
+}
+
+func (i *IVFWriter) writeFrame(frame []byte, timestamp uint64) error {
 	frameHeader := make([]byte, 12)
-	binary.LittleEndian.PutUint32(frameHeader[0:], uint32(len(frame))) // Frame length
-	binary.LittleEndian.PutUint64(frameHeader[4:], i.count)            // PTS
+	//nolint:gosec // G115
+	binary.LittleEndian.PutUint32(frameHeader[0:], uint32(len(frame)))          // Frame length
+	binary.LittleEndian.PutUint64(frameHeader[4:], i.timestampToPts(timestamp)) // PTS
 	i.count++
 
 	if _, err := i.ioWriter.Write(frameHeader); err != nil {
 		return err
 	}
 	_, err := i.ioWriter.Write(frame)
+
 	return err
 }
 
-// WriteRTP adds a new packet and writes the appropriate headers for it
-func (i *IVFWriter) WriteRTP(packet *rtp.Packet) error {
+// WriteRTP adds a new packet and writes the appropriate headers for it.
+func (i *IVFWriter) WriteRTP(packet *rtp.Packet) error { //nolint:cyclop
 	if i.ioWriter == nil {
 		return errFileNotOpened
 	} else if len(packet.Payload) == 0 {
 		return nil
 	}
 
-	if i.isVP8 {
+	if i.count == 0 {
+		i.firstFrameTimestamp = packet.Header.Timestamp
+	}
+	relativeTstampMs := 1000 * uint64(packet.Header.Timestamp-i.firstFrameTimestamp) / i.clockRate
+
+	if i.isVP8 { //nolint:nestif
 		vp8Packet := codecs.VP8Packet{}
 		if _, err := vp8Packet.Unmarshal(packet.Payload); err != nil {
 			return err
 		}
 
-		isKeyFrame := vp8Packet.Payload[0] & 0x01
+		isKeyFrame := (vp8Packet.Payload[0] & 0x01) == 0
 		switch {
-		case !i.seenKeyFrame && isKeyFrame == 1:
+		case !i.seenKeyFrame && !isKeyFrame:
 			return nil
 		case i.currentFrame == nil && vp8Packet.S != 1:
 			return nil
@@ -150,7 +181,7 @@ func (i *IVFWriter) WriteRTP(packet *rtp.Packet) error {
 			return nil
 		}
 
-		if err := i.writeFrame(i.currentFrame); err != nil {
+		if err := i.writeFrame(i.currentFrame, relativeTstampMs); err != nil {
 			return err
 		}
 		i.currentFrame = nil
@@ -166,7 +197,7 @@ func (i *IVFWriter) WriteRTP(packet *rtp.Packet) error {
 		}
 
 		for j := range obus {
-			if err := i.writeFrame(obus[j]); err != nil {
+			if err := i.writeFrame(obus[j], relativeTstampMs); err != nil {
 				return err
 			}
 		}
@@ -175,7 +206,7 @@ func (i *IVFWriter) WriteRTP(packet *rtp.Packet) error {
 	return nil
 }
 
-// Close stops the recording
+// Close stops the recording.
 func (i *IVFWriter) Close() error {
 	if i.ioWriter == nil {
 		// Returns no error as it may be convenient to call
@@ -193,7 +224,7 @@ func (i *IVFWriter) Close() error {
 			return err
 		}
 		buff := make([]byte, 4)
-		binary.LittleEndian.PutUint32(buff, uint32(i.count))
+		binary.LittleEndian.PutUint32(buff, uint32(i.count)) //nolint:gosec // G115
 		if _, err := ws.Write(buff); err != nil {
 			return err
 		}
@@ -209,7 +240,7 @@ func (i *IVFWriter) Close() error {
 // An Option configures a SampleBuilder.
 type Option func(i *IVFWriter) error
 
-// WithCodec configures if IVFWriter is writing AV1 or VP8 packets to disk
+// WithCodec configures if IVFWriter is writing AV1 or VP8 packets to disk.
 func WithCodec(mimeType string) Option {
 	return func(i *IVFWriter) error {
 		if i.isVP8 || i.isAV1 {

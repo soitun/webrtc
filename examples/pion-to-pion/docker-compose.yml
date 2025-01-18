@@ -1,17 +1,15 @@
+# SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+# SPDX-License-Identifier: MIT
 version: '3'
 services:
   answer:
     container_name: answer
     build: ./answer
-    hostname: answer
-    restart: always   
-    ports:
-      - 50000:50000    
-      
+    command: answer -offer-address offer:50000
+
   offer:
-    depends_on:  
-      - answer
     container_name: offer
+    depends_on:
+      - answer
     build: ./offer
-    hostname: offer
-    restart: always
+    command: offer -answer-address answer:60000

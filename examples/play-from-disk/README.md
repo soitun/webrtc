@@ -4,7 +4,7 @@ play-from-disk demonstrates how to send video and/or audio to your browser from 
 For an example of playing H264 from disk see [play-from-disk-h264](https://github.com/pion/example-webrtc-applications/tree/master/play-from-disk-h264)
 
 ## Instructions
-### Create IVF named `output.ivf` that contains a VP8 track and/or `output.ogg` that contains a Opus track
+### Create IVF named `output.ivf` that contains a VP8/VP9/AV1 track and/or `output.ogg` that contains a Opus track
 ```
 ffmpeg -i $INPUT_FILE -g 30 -b:v 2M output.ivf
 ffmpeg -i $INPUT_FILE -c:a libopus -page_duration 20000 -vn output.ogg
@@ -15,12 +15,11 @@ ffmpeg -i $INPUT_FILE -c:a libopus -page_duration 20000 -vn output.ogg
 ### Download play-from-disk
 
 ```
-export GO111MODULE=on
-go get github.com/pion/webrtc/v3/examples/play-from-disk
+go install github.com/pion/webrtc/v4/examples/play-from-disk@latest
 ```
 
 ### Open play-from-disk example page
-[jsfiddle.net](https://jsfiddle.net/a1cz42op/) you should see two text-areas, 'Start Session' button and 'Copy browser SessionDescription to clipboard'
+[jsfiddle.net](https://jsfiddle.net/8kup9mvn/) you should see two text-areas, 'Start Session' button and 'Copy browser SessionDescription to clipboard'
 
 ### Run play-from-disk with your browsers Session Description as stdin
 The `output.ivf` you created should be in the same directory as `play-from-disk`. In the jsfiddle press 'Copy browser Session Description to clipboard' or copy the base64 string manually.

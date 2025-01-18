@@ -1,5 +1,8 @@
 /* eslint-env browser */
 
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 // cipherKey that video is encrypted with
 const cipherKey = 0xAA
 
@@ -60,7 +63,7 @@ window.startSession = () => {
   }
 
   try {
-    pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(atob(sd))))
+    pc.setRemoteDescription(JSON.parse(atob(sd)))
   } catch (e) {
     alert(e)
   }

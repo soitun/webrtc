@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 import (
@@ -9,9 +12,11 @@ import (
 type SDPType int
 
 const (
-	// SDPTypeOffer indicates that a description MUST be treated as an SDP
-	// offer.
-	SDPTypeOffer SDPType = iota + 1
+	// SDPTypeUnknown is the enum's zero-value.
+	SDPTypeUnknown SDPType = iota
+
+	// SDPTypeOffer indicates that a description MUST be treated as an SDP offer.
+	SDPTypeOffer
 
 	// SDPTypePranswer indicates that a description MUST be treated as an
 	// SDP answer, but not a final answer. A description used as an SDP
@@ -41,7 +46,7 @@ const (
 	sdpTypeRollbackStr = "rollback"
 )
 
-// NewSDPType creates an SDPType from a string
+// NewSDPType creates an SDPType from a string.
 func NewSDPType(raw string) SDPType {
 	switch raw {
 	case sdpTypeOfferStr:
@@ -53,7 +58,7 @@ func NewSDPType(raw string) SDPType {
 	case sdpTypeRollbackStr:
 		return SDPTypeRollback
 	default:
-		return SDPType(Unknown)
+		return SDPTypeUnknown
 	}
 }
 
@@ -72,12 +77,12 @@ func (t SDPType) String() string {
 	}
 }
 
-// MarshalJSON enables JSON marshaling of a SDPType
+// MarshalJSON enables JSON marshaling of a SDPType.
 func (t SDPType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.String())
 }
 
-// UnmarshalJSON enables JSON unmarshaling of a SDPType
+// UnmarshalJSON enables JSON unmarshaling of a SDPType.
 func (t *SDPType) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {

@@ -4,12 +4,11 @@ rtp-forwarder is a simple application that shows how to forward your webcam/micr
 ## Instructions
 ### Download rtp-forwarder
 ```
-export GO111MODULE=on
-go get github.com/pion/webrtc/v3/examples/rtp-forwarder
+go install github.com/pion/webrtc/v4/examples/rtp-forwarder@latest
 ```
 
 ### Open rtp-forwarder example page
-[jsfiddle.net](https://jsfiddle.net/xjcve6d3/) you should see your Webcam, two text-areas and `Copy browser SDP to clipboard`, `Start Session` buttons
+[jsfiddle.net](https://jsfiddle.net/fm7btvr3/) you should see your Webcam, two text-areas and `Copy browser SDP to clipboard`, `Start Session` buttons
 
 ### Run rtp-forwarder, with your browsers SessionDescription as stdin
 In the jsfiddle the top textarea is your browser's Session Description. Press `Copy browser SDP to clipboard` or copy the base64 string manually.

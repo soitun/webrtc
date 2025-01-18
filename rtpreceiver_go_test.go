@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 //go:build !js
 // +build !js
 
@@ -8,12 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pion/webrtc/v3/pkg/media"
+	"github.com/pion/sdp/v3"
+	"github.com/pion/webrtc/v4/pkg/media"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSetRTPParameters(t *testing.T) {
-	sender, receiver, wan := createVNetPair(t)
+	sender, receiver, wan := createVNetPair(t, nil)
 
 	outgoingTrack, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: MimeTypeVP8}, "video", "pion")
 	assert.NoError(t, err)
@@ -23,34 +27,38 @@ func TestSetRTPParameters(t *testing.T) {
 
 	// Those parameters wouldn't make sense in a real application,
 	// but for the sake of the test we just need different values.
-	p := RTPParameters{
+	params := RTPParameters{
 		Codecs: []RTPCodecParameters{
 			{
-				RTPCodecCapability: RTPCodecCapability{MimeTypeOpus, 48000, 2, "minptime=10;useinbandfec=1", []RTCPFeedback{{"nack", ""}}},
-				PayloadType:        111,
+				RTPCodecCapability: RTPCodecCapability{
+					MimeTypeOpus, 48000, 2,
+					"minptime=10;useinbandfec=1",
+					[]RTCPFeedback{{"nack", ""}},
+				},
+				PayloadType: 111,
 			},
 		},
 		HeaderExtensions: []RTPHeaderExtensionParameter{
-			{URI: "urn:ietf:params:rtp-hdrext:sdes:mid"},
-			{URI: "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id"},
-			{URI: "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id"},
+			{URI: sdp.SDESMidURI},
+			{URI: sdp.SDESRTPStreamIDURI},
+			{URI: sdp.SDESRepairRTPStreamIDURI},
 		},
 	}
 
 	seenPacket, seenPacketCancel := context.WithCancel(context.Background())
-	receiver.OnTrack(func(trackRemote *TrackRemote, r *RTPReceiver) {
-		r.SetRTPParameters(p)
+	receiver.OnTrack(func(_ *TrackRemote, r *RTPReceiver) {
+		r.SetRTPParameters(params)
 
 		incomingTrackCodecs := r.Track().Codec()
 
-		assert.EqualValues(t, p.HeaderExtensions, r.Track().params.HeaderExtensions)
+		assert.EqualValues(t, params.HeaderExtensions, r.Track().params.HeaderExtensions)
 
-		assert.EqualValues(t, p.Codecs[0].MimeType, incomingTrackCodecs.MimeType)
-		assert.EqualValues(t, p.Codecs[0].ClockRate, incomingTrackCodecs.ClockRate)
-		assert.EqualValues(t, p.Codecs[0].Channels, incomingTrackCodecs.Channels)
-		assert.EqualValues(t, p.Codecs[0].SDPFmtpLine, incomingTrackCodecs.SDPFmtpLine)
-		assert.EqualValues(t, p.Codecs[0].RTCPFeedback, incomingTrackCodecs.RTCPFeedback)
-		assert.EqualValues(t, p.Codecs[0].PayloadType, incomingTrackCodecs.PayloadType)
+		assert.EqualValues(t, params.Codecs[0].MimeType, incomingTrackCodecs.MimeType)
+		assert.EqualValues(t, params.Codecs[0].ClockRate, incomingTrackCodecs.ClockRate)
+		assert.EqualValues(t, params.Codecs[0].Channels, incomingTrackCodecs.Channels)
+		assert.EqualValues(t, params.Codecs[0].SDPFmtpLine, incomingTrackCodecs.SDPFmtpLine)
+		assert.EqualValues(t, params.Codecs[0].RTCPFeedback, incomingTrackCodecs.RTCPFeedback)
+		assert.EqualValues(t, params.Codecs[0].PayloadType, incomingTrackCodecs.PayloadType)
 
 		seenPacketCancel()
 	})

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package oggreader
 
 import (
@@ -9,7 +12,7 @@ import (
 )
 
 // buildOggFile generates a valid oggfile that can
-// be used for tests
+// be used for tests.
 func buildOggContainer() []byte {
 	return []byte{
 		0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
@@ -43,10 +46,12 @@ func TestOggReader_ParseNextPage(t *testing.T) {
 	reader, _, err := NewWith(ogg)
 	assert.NoError(t, err)
 	assert.NotNil(t, reader)
+	assert.Equal(t, int64(47), reader.bytesReadSuccesfully)
 
 	payload, _, err := reader.ParseNextPage()
 	assert.Equal(t, []byte{0x98, 0x36, 0xbe, 0x88, 0x9e}, payload)
 	assert.NoError(t, err)
+	assert.Equal(t, int64(80), reader.bytesReadSuccesfully)
 
 	_, _, err = reader.ParseNextPage()
 	assert.Equal(t, err, io.EOF)

@@ -1,12 +1,18 @@
+// SPDX-FileCopyrightText: 2023 The Pion community <https://pion.ly>
+// SPDX-License-Identifier: MIT
+
 package webrtc
 
 // RTPTransceiverDirection indicates the direction of the RTPTransceiver.
 type RTPTransceiverDirection int
 
 const (
+	// RTPTransceiverDirectionUnknown is the enum's zero-value.
+	RTPTransceiverDirectionUnknown RTPTransceiverDirection = iota
+
 	// RTPTransceiverDirectionSendrecv indicates the RTPSender will offer
 	// to send RTP and the RTPReceiver will offer to receive RTP.
-	RTPTransceiverDirectionSendrecv RTPTransceiverDirection = iota + 1
+	RTPTransceiverDirectionSendrecv
 
 	// RTPTransceiverDirectionSendonly indicates the RTPSender will offer
 	// to send RTP.
@@ -42,7 +48,7 @@ func NewRTPTransceiverDirection(raw string) RTPTransceiverDirection {
 	case rtpTransceiverDirectionInactiveStr:
 		return RTPTransceiverDirectionInactive
 	default:
-		return RTPTransceiverDirection(Unknown)
+		return RTPTransceiverDirectionUnknown
 	}
 }
 
@@ -61,7 +67,7 @@ func (t RTPTransceiverDirection) String() string {
 	}
 }
 
-// Revers indicate the opposite direction
+// Revers indicate the opposite direction.
 func (t RTPTransceiverDirection) Revers() RTPTransceiverDirection {
 	switch t {
 	case RTPTransceiverDirectionSendonly:
@@ -73,7 +79,10 @@ func (t RTPTransceiverDirection) Revers() RTPTransceiverDirection {
 	}
 }
 
-func haveRTPTransceiverDirectionIntersection(haystack []RTPTransceiverDirection, needle []RTPTransceiverDirection) bool {
+func haveRTPTransceiverDirectionIntersection(
+	haystack []RTPTransceiverDirection,
+	needle []RTPTransceiverDirection,
+) bool {
 	for _, n := range needle {
 		for _, h := range haystack {
 			if n == h {
@@ -81,5 +90,6 @@ func haveRTPTransceiverDirectionIntersection(haystack []RTPTransceiverDirection,
 			}
 		}
 	}
+
 	return false
 }
